@@ -1,0 +1,51 @@
+# Keeps the Render free-tier service awake so it doesn't cold-start during grading.
+# Render sleeps after ~15 min idle; this pings /health on a schedule to prevent that.
+#
+# SETUP (one time):
+#   Repo -> Settings -> Secrets and variables -> Actions -> Variables tab ->
+#   New repository variable:  name = SERVICE_URL
+#   value = https://<your-service>.onrender.com   (no trailing /health)
+#
+# NOTE ON COST/RELIABILITY (read this):
+#   * Public repo  -> Actions minutes are free/unlimited. Leave it running.
+#   * Private repo -> each run rounds UP to 1 billed minute, so a continuous
+#     5-min schedule (~8600 runs/month) exceeds the 2000-min free cap. On a
+#     private repo, enable this only during the grading window (a few days is
+#     well under the cap) and disable it afterward, or make the repo public.
+#   * GitHub's scheduler can drift under load; 5 min nominal keeps you safely
+#     under Render's 15-min sleep even with typical delay. For a hard guarantee
+#     during the actual grading run, an external pinger (e.g. UptimeRobot) is
+#     more reliable and uses no Actions minutes.
+
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 min (GitHub's minimum granularity)
+  workflow_dispatch: {}      # lets you run it manually from the Actions tab
+
+# If a previous ping is still waking a cold service, don't stack runs.
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        env:
+          SERVICE_URL: ${{ vars.SERVICE_URL }}
+        run: |
+          if [ -z "${SERVICE_URL}" ]; then
+            echo "SERVICE_URL repo variable is not set — skipping."
+            echo "Set it under Settings > Secrets and variables > Actions > Variables."
+            exit 0
+          fi
+          URL="${SERVICE_URL%/}/health"
+          echo "Pinging ${URL}"
+          # Generous timeout + retries so a cold start (30-60s) still counts as a wake.
+          curl -fsS --max-time 90 --retry 4 --retry-delay 15 --retry-all-errors "${URL}"
+          echo ""
+          echo "keep-alive ping OK"

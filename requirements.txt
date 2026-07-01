@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27
+rank-bm25>=0.2.2
+pydantic>=2.6
+pydantic-settings>=2.2
+# Dev/eval only:
+pytest>=8.0
+# Optional (only if USE_EMBEDDINGS=true): sentence-transformers>=2.6

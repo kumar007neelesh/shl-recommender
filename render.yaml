@@ -1,0 +1,22 @@
+# Render Blueprint. Deploy with: Render Dashboard -> New -> Blueprint -> pick repo.
+services:
+  - type: web
+    name: shl-recommender
+    runtime: python
+    plan: free
+    # Build the catalog at build time so it's baked into the deploy (fast cold
+    # start). Tolerant of a transient ingest failure: the app falls back to
+    # fetching the catalog from the source URL on first boot.
+    buildCommand: "pip install -r requirements.txt && (python -m scripts.ingest || echo 'ingest failed at build; runtime fallback will fetch catalog')"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"          # pin to avoid version-incompatibility surprises
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
+      - key: LLM_API_KEY
+        sync: false              # Render prompts for this secret at create time

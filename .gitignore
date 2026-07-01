@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+.pytest_cache/
+.vercel/
+data/traces/
+# NOTE: data/catalog_normalized.json is intentionally committable so it gets
+# bundled into the Vercel/Docker deploy (faster cold start). Generate it with
+# `python -m scripts.ingest`. If you prefer not to commit it, the service will
+# fetch the catalog from the source URL on first boot instead.
