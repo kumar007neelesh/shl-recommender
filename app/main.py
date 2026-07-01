@@ -10,10 +10,11 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .agent import Agent
-from .catalog import Catalog, normalize_catalog
+from .catalog import Catalog, loads_lenient, normalize_catalog
 from .config import get_settings
 from .llm import LLMClient
 from .retriever import Retriever
@@ -42,7 +43,7 @@ def _load_catalog(settings) -> Catalog:
         with httpx.Client(timeout=60, follow_redirects=True) as client:
             resp = client.get(settings.catalog_source_url)
             resp.raise_for_status()
-            raw = resp.json()
+            raw = loads_lenient(resp.text)
         items = normalize_catalog(raw, individual_only=True)
         log.info("Fetched catalog: %d Individual Test Solutions", len(items))
         return Catalog.from_items(items)
@@ -67,6 +68,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SHL Assessment Recommender", lifespan=lifespan)
+
+# Allow the GitHub Pages frontend (and local dev) to call this API from the browser.
+# Render serves over HTTPS so no mixed-content issues.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://*.github.io",   # any GitHub Pages site
+        "http://localhost:*",    # local dev (Vite / live-server / file://)
+        "http://127.0.0.1:*",
+    ],
+    allow_origin_regex=r"https://.*\.github\.io",
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health", response_model=HealthResponse)

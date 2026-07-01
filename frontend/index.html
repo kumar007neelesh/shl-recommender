@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SHL Assessment Recommender</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+  <style>
+    /* ── tokens ─────────────────────────────────────────────────────────── */
+    :root {
+      --bg:          #0f1117;
+      --surface:     #181c27;
+      --surface2:    #1f2436;
+      --border:      #2a3147;
+      --shl-green:   #4cde80;        /* SHL brand green, used as the ONE accent */
+      --shl-green-d: #38c26a;
+      --text:        #e8eaf2;
+      --text-muted:  #6b7494;
+      --user-bubble: #1e2d4a;
+      --ai-bubble:   #1a1f30;
+      --badge-bg:    #1a2e1f;
+      --badge-text:  #4cde80;
+      --danger:      #f87171;
+      --radius:      14px;
+      --radius-sm:   8px;
+      --font-ui:     'Inter', system-ui, sans-serif;
+      --font-display:'DM Serif Display', Georgia, serif;
+      --shadow:      0 4px 24px rgba(0,0,0,.45);
+    }
+
+    /* ── reset ───────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* ── layout ──────────────────────────────────────────────────────────── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 780px;
+      height: 100vh;
+      padding: 0 16px;
+    }
+
+    /* ── header ──────────────────────────────────────────────────────────── */
+    header {
+      padding: 20px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .logo {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      color: var(--shl-green);
+      letter-spacing: -.02em;
+    }
+    .logo span { color: var(--text); }
+    .header-sub {
+      font-size: .75rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      text-align: right;
+      line-height: 1.5;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      margin-right: 5px;
+      vertical-align: middle;
+      transition: background .3s;
+    }
+    .status-dot.online { background: var(--shl-green); box-shadow: 0 0 6px var(--shl-green); }
+    .status-dot.error  { background: var(--danger); }
+
+    /* ── chat area ───────────────────────────────────────────────────────── */
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+    .chat::-webkit-scrollbar { width: 4px; }
+    .chat::-webkit-scrollbar-track { background: transparent; }
+    .chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── welcome card ────────────────────────────────────────────────────── */
+    .welcome {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      text-align: center;
+    }
+    .welcome h2 {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .welcome h2 em { color: var(--shl-green); font-style: normal; }
+    .welcome p { color: var(--text-muted); font-size: .875rem; line-height: 1.6; max-width: 480px; margin: 0 auto 18px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: .8rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+      white-space: nowrap;
+    }
+    .chip:hover { border-color: var(--shl-green); color: var(--shl-green); }
+
+    /* ── messages ────────────────────────────────────────────────────────── */
+    .msg-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      animation: fadeUp .25s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg-row.user  { flex-direction: row-reverse; }
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .75rem;
+      font-weight: 600;
+    }
+    .avatar.ai   { background: var(--shl-green); color: #000; }
+    .avatar.user { background: var(--user-bubble); color: var(--text); border: 1px solid var(--border); }
+    .bubble {
+      max-width: 82%;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: .9rem;
+      line-height: 1.65;
+    }
+    .msg-row.user  .bubble { background: var(--user-bubble); border-bottom-right-radius: 4px; }
+    .msg-row.ai    .bubble { background: var(--ai-bubble); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .msg-row.error .bubble { background: #2d1212; border: 1px solid #7f2020; color: var(--danger); }
+
+    /* ── recommendations panel ───────────────────────────────────────────── */
+    .recs-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--shl-green);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-top: 4px;
+    }
+    .recs-label {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--shl-green);
+      margin-bottom: 12px;
+    }
+    .rec-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .rec-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      transition: border-color .2s;
+    }
+    .rec-item:hover { border-color: var(--shl-green); }
+    .rec-badge {
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      padding: 3px 7px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .rec-name {
+      font-size: .875rem;
+      font-weight: 500;
+      color: var(--text);
+      flex: 1;
+    }
+    .rec-link {
+      font-size: .75rem;
+      color: var(--shl-green);
+      text-decoration: none;
+      flex-shrink: 0;
+      opacity: .75;
+      transition: opacity .2s;
+    }
+    .rec-link:hover { opacity: 1; text-decoration: underline; }
+
+    /* ── typing indicator ────────────────────────────────────────────────── */
+    .typing-row { display: flex; gap: 10px; align-items: center; }
+    .typing-bubble {
+      background: var(--ai-bubble);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      border-bottom-left-radius: 4px;
+      padding: 14px 18px;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: bounce 1.2s infinite;
+    }
+    .dot:nth-child(2) { animation-delay: .2s; }
+    .dot:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+      40%            { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ── input bar ───────────────────────────────────────────────────────── */
+    .input-bar {
+      padding: 14px 0 20px;
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+    }
+    .input-wrap {
+      display: flex;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 8px 8px 16px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: var(--shl-green); }
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: .9rem;
+      resize: none;
+      max-height: 140px;
+      line-height: 1.6;
+      padding-top: 4px;
+    }
+    textarea::placeholder { color: var(--text-muted); }
+    .send-btn {
+      background: var(--shl-green);
+      color: #000;
+      border: none;
+      border-radius: var(--radius-sm);
+      width: 38px;
+      height: 38px;
+      cursor: pointer;
+      flex-shrink: 0;
+      align-self: flex-end;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .2s, transform .1s;
+    }
+    .send-btn:hover:not(:disabled) { background: var(--shl-green-d); }
+    .send-btn:active:not(:disabled) { transform: scale(.93); }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .send-btn svg { width: 16px; height: 16px; }
+    .actions-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-muted);
+      font-size: .75rem;
+      font-family: var(--font-ui);
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .action-btn:hover { border-color: var(--shl-green); color: var(--shl-green); }
+
+    /* ── config modal ────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      width: min(480px, 92vw);
+      box-shadow: var(--shadow);
+    }
+    .modal h3 { font-family: var(--font-display); font-size: 1.3rem; margin-bottom: 6px; }
+    .modal p  { font-size: .8rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: .78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; letter-spacing: .04em; text-transform: uppercase; }
+    .field input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: .875rem;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .field input:focus { border-color: var(--shl-green); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+    .btn-primary {
+      background: var(--shl-green);
+      color: #000;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 9px 20px;
+      font-family: var(--font-ui);
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-primary:hover { background: var(--shl-green-d); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: var(--font-ui);
+      font-size: .875rem;
+      padding: 9px 20px;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-ghost:hover { border-color: var(--text-muted); color: var(--text); }
+    .note {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: .78rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+    .note code {
+      background: var(--bg);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: .85em;
+      color: var(--shl-green);
+    }
+
+    /* ── responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 520px) {
+      .bubble  { max-width: 92%; }
+      .welcome { padding: 20px 16px; }
+      header   { flex-wrap: wrap; }
+      .header-sub { margin-left: 0; text-align: left; width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dot, .msg-row { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── header ─────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">SHL<span>.</span></div>
+    <div style="font-size:.82rem;color:var(--text-muted);font-weight:500;">Assessment Recommender</div>
+    <div class="header-sub">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">connecting…</span>
+      &nbsp;·&nbsp;
+      <button class="action-btn" onclick="openConfig()" style="font-size:.72rem;padding:3px 9px;">⚙ API URL</button>
+    </div>
+  </header>
+
+  <!-- ── chat ───────────────────────────────────────────────────────────── -->
+  <div class="chat" id="chat">
+    <!-- welcome shown until first message sent -->
+    <div class="welcome" id="welcome">
+      <h2>Find the right <em>assessment</em></h2>
+      <p>Tell me about the role you're hiring for. I'll ask a few focused questions and return a grounded shortlist from the SHL Individual Test Solutions catalog.</p>
+      <div class="chips" id="chipList"></div>
+    </div>
+  </div>
+
+  <!-- ── input bar ──────────────────────────────────────────────────────── -->
+  <div class="input-bar">
+    <div class="input-wrap">
+      <textarea
+        id="inputBox"
+        placeholder="Describe the role or paste a job description…"
+        rows="1"
+        onkeydown="handleKey(event)"
+        oninput="autoGrow(this)"
+      ></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send (Enter)">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path d="M3.105 3.105a.75.75 0 01.814-.162l13.5 6a.75.75 0 010 1.37l-13.5 6a.75.75 0 01-1.05-.918L4.996 10 2.87 4.023a.75.75 0 01.235-.918z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="actions-row">
+      <button class="action-btn" onclick="clearChat()">↺ New conversation</button>
+      <button class="action-btn" onclick="copyLastRecs()" id="copyBtn" style="display:none">⎘ Copy recommendations</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── config modal ────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <h3>API Configuration</h3>
+    <p>Point the UI at your deployed Render service. The URL is saved in your browser and never sent anywhere else.</p>
+    <div class="field">
+      <label>Render API URL</label>
+      <input type="url" id="apiUrlInput" placeholder="https://shl-recommender-xxxx.onrender.com" />
+    </div>
+    <div class="note">
+      Leave out the trailing <code>/chat</code> — just the base URL,
+      e.g. <code>https://shl-recommender-1234.onrender.com</code>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeConfig()">Cancel</button>
+      <button class="btn-primary" onclick="saveConfig()">Save & Connect</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── state ───────────────────────────────────────────────────────────────── */
+const STORAGE_KEY = 'shl_api_url';
+let apiUrl        = localStorage.getItem(STORAGE_KEY) || '';
+let history       = [];         // [{role, content}]
+let busy          = false;
+let lastRecs      = [];
+
+const STARTER_CHIPS = [
+  'Hiring a mid-level Java developer',
+  'Looking for a sales manager',
+  'Graduate recruitment — cognitive ability',
+  'Senior data analyst role',
+  'Personality test for leadership hire',
+  'Customer service rep assessment',
+];
+
+/* ── boot ────────────────────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  renderChips();
+  if (apiUrl) {
+    checkHealth();
+  } else {
+    setStatus('no-url');
+    openConfig();
+  }
+});
+
+function renderChips() {
+  const el = document.getElementById('chipList');
+  STARTER_CHIPS.forEach(text => {
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.textContent = text;
+    btn.onclick = () => sendWith(text);
+    el.appendChild(btn);
+  });
+}
+
+/* ── status dot ──────────────────────────────────────────────────────────── */
+function setStatus(state) {
+  const dot  = document.getElementById('statusDot');
+  const txt  = document.getElementById('statusText');
+  dot.className = 'status-dot';
+  if (state === 'online') {
+    dot.classList.add('online');
+    txt.textContent = 'Connected';
+  } else if (state === 'error') {
+    dot.classList.add('error');
+    txt.textContent = 'Cannot reach API';
+  } else if (state === 'no-url') {
+    txt.textContent = 'No API URL set';
+  } else {
+    txt.textContent = 'Checking…';
+  }
+}
+
+async function checkHealth() {
+  if (!apiUrl) { setStatus('no-url'); return; }
+  setStatus('checking');
+  try {
+    const res = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    if (data.status === 'ok') setStatus('online');
+    else throw new Error('bad status');
+  } catch {
+    setStatus('error');
+  }
+}
+
+/* ── config modal ────────────────────────────────────────────────────────── */
+function openConfig() {
+  document.getElementById('apiUrlInput').value = apiUrl;
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('apiUrlInput').focus(), 50);
+}
+function closeConfig() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+function handleOverlayClick(e) {
+  if (e.target === e.currentTarget) closeConfig();
+}
+function saveConfig() {
+  const raw = document.getElementById('apiUrlInput').value.trim().replace(/\/+$/, '');
+  if (!raw) return;
+  apiUrl = raw;
+  localStorage.setItem(STORAGE_KEY, apiUrl);
+  closeConfig();
+  checkHealth();
+}
+
+/* ── textarea auto-grow ──────────────────────────────────────────────────── */
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+/* ── keyboard ────────────────────────────────────────────────────────────── */
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+/* ── send ────────────────────────────────────────────────────────────────── */
+function sendWith(text) {
+  document.getElementById('inputBox').value = text;
+  sendMessage();
+}
+
+async function sendMessage() {
+  if (busy) return;
+  const box  = document.getElementById('inputBox');
+  const text = box.value.trim();
+  if (!text) return;
+
+  if (!apiUrl) { openConfig(); return; }
+
+  hideWelcome();
+  box.value = '';
+  box.style.height = 'auto';
+
+  appendMsg('user', text);
+  history.push({ role: 'user', content: text });
+
+  setBusy(true);
+  showTyping();
+
+  try {
+    const res = await fetch(`${apiUrl}/chat`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ messages: history }),
+      signal:  AbortSignal.timeout(35000),
+    });
+
+    removeTyping();
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`${res.status}: ${body.slice(0, 120)}`);
+    }
+
+    const data = await res.json();
+    appendMsg('ai', data.reply, data.recommendations || []);
+    history.push({ role: 'assistant', content: data.reply });
+
+    if (data.recommendations && data.recommendations.length) {
+      lastRecs = data.recommendations;
+      document.getElementById('copyBtn').style.display = '';
+    }
+
+  } catch (err) {
+    removeTyping();
+    const msg = err.name === 'TimeoutError'
+      ? 'The request timed out (35 s). The service may be cold-starting — try again in a moment.'
+      : `Could not reach the API: ${err.message}`;
+    appendMsg('error', msg);
+    setStatus('error');
+  } finally {
+    setBusy(false);
+    box.focus();
+  }
+}
+
+/* ── DOM helpers ─────────────────────────────────────────────────────────── */
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function setBusy(state) {
+  busy = state;
+  document.getElementById('sendBtn').disabled = state;
+}
+
+function appendMsg(role, text, recs) {
+  const chat = document.getElementById('chat');
+  const row  = document.createElement('div');
+  row.className = `msg-row ${role}`;
+
+  const av = document.createElement('div');
+  av.className = `avatar ${role}`;
+  av.textContent = role === 'user' ? 'You' : role === 'ai' ? 'AI' : '!';
+
+  const bub = document.createElement('div');
+  bub.className = 'bubble';
+
+  const inner = document.createElement('div');
+  inner.textContent = text;
+  bub.appendChild(inner);
+
+  if (recs && recs.length) {
+    bub.appendChild(buildRecPanel(recs));
+  }
+
+  row.appendChild(av);
+  row.appendChild(bub);
+  chat.appendChild(row);
+  scrollBottom();
+}
+
+function buildRecPanel(recs) {
+  const panel = document.createElement('div');
+  panel.className = 'recs-panel';
+
+  const label = document.createElement('div');
+  label.className = 'recs-label';
+  label.textContent = `${recs.length} Assessment${recs.length > 1 ? 's' : ''} Recommended`;
+  panel.appendChild(label);
+
+  const ul = document.createElement('ul');
+  ul.className = 'rec-list';
+
+  recs.forEach(r => {
+    const li   = document.createElement('li');
+    li.className = 'rec-item';
+
+    const badge = document.createElement('span');
+    badge.className = 'rec-badge';
+    badge.textContent = r.test_type || '–';
+
+    const name = document.createElement('span');
+    name.className = 'rec-name';
+    name.textContent = r.name;
+
+    const link = document.createElement('a');
+    link.className = 'rec-link';
+    link.href = r.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'View ↗';
+
+    li.appendChild(badge);
+    li.appendChild(name);
+    li.appendChild(link);
+    ul.appendChild(li);
+  });
+
+  panel.appendChild(ul);
+  return panel;
+}
+
+function showTyping() {
+  const chat = document.getElementById('chat');
+  const row  = document.createElement('div');
+  row.className = 'typing-row';
+  row.id = 'typingRow';
+
+  const av = document.createElement('div');
+  av.className = 'avatar ai';
+  av.textContent = 'AI';
+
+  const bub = document.createElement('div');
+  bub.className = 'typing-bubble';
+  [0,1,2].forEach(i => {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    bub.appendChild(d);
+  });
+
+  row.appendChild(av);
+  row.appendChild(bub);
+  chat.appendChild(row);
+  scrollBottom();
+}
+
+function removeTyping() {
+  document.getElementById('typingRow')?.remove();
+}
+
+function scrollBottom() {
+  const chat = document.getElementById('chat');
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function clearChat() {
+  history = [];
+  lastRecs = [];
+  const chat = document.getElementById('chat');
+  chat.innerHTML = '';
+  // re-inject welcome
+  const w = document.createElement('div');
+  w.className = 'welcome';
+  w.id = 'welcome';
+  w.innerHTML = `
+    <h2>Find the right <em>assessment</em></h2>
+    <p>Tell me about the role you're hiring for. I'll ask a few focused questions and return a grounded shortlist from the SHL Individual Test Solutions catalog.</p>
+    <div class="chips" id="chipList"></div>`;
+  chat.appendChild(w);
+  renderChips();
+  document.getElementById('copyBtn').style.display = 'none';
+  document.getElementById('inputBox').focus();
+}
+
+async function copyLastRecs() {
+  if (!lastRecs.length) return;
+  const text = lastRecs.map((r, i) =>
+    `${i+1}. ${r.name} [${r.test_type || '–'}]\n   ${r.url}`
+  ).join('\n\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copyBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  } catch {}
+}
+</script>
+</body>
+</html>
