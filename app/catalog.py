@@ -14,6 +14,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import re
+
+_CTRL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+def loads_lenient(text: str):
+    try:
+        return json.loads(text, strict=False)
+    except json.JSONDecodeError:
+        return json.loads(_CTRL_CHARS.sub("", text), strict=False)
+
 # SHL standard test-type codes, used to backfill test_type when the raw record
 # only carries a human-readable category.
 TEST_TYPE_KEYWORDS = {
